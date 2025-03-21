@@ -3,7 +3,6 @@ import { useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
 import Dashboard from "./Dashboard";
 import Inventory from "./Inventory";
-import Orders from "./Orders";
 import Suppliers from "./Suppliers";
 
 function App() {
@@ -31,7 +30,6 @@ function App() {
     <ul className="space-y-4">
       <li><Link to="/" onClick={() => setSidebarOpen(false)}>Dashboard</Link></li>
       <li><Link to="/inventory" onClick={() => setSidebarOpen(false)}>Inventory</Link></li>
-      <li><Link to="/orders" onClick={() => setSidebarOpen(false)}>Orders</Link></li>
       <li><Link to="/suppliers" onClick={() => setSidebarOpen(false)}>Suppliers</Link></li>
     </ul>
   </nav>
@@ -57,7 +55,6 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inventory" element={<Inventory />} />
-            <Route path="/orders" element={<Orders />} />
             <Route path="/suppliers" element={<Suppliers />} />
           </Routes>
         </main>
