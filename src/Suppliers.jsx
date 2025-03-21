@@ -15,6 +15,8 @@ const inventoryItems = [
   { label: "Corn", value: "Corn" },
 ];
 
+
+
 const vendors = [
   {
     name: "Vendor A",
@@ -29,6 +31,28 @@ const vendors = [
     prices: { Rice: 42, Wheat: 34, Sugar: 55, Salt: 18, Lentils: 65, Chicken: 185, Fish: 195, Eggs: 5, Apples: 145, Corn: 72 },
   },
 ];
+
+
+const VendorList = ({ vendors }) => {
+    return (
+      <div className="flex flex-wrap gap-6">
+        {vendors.map((vendor, index) => (
+          <div key={index} className="bg-white shadow-lg rounded-2xl p-4 w-64">
+            <h2 className="text-xl font-bold mb-3">{vendor.name}</h2>
+            <ul className="space-y-2">
+              {vendor.prices &&
+                Object.entries(vendor.prices).map(([item, price], idx) => (
+                  <li key={idx} className="flex justify-between">
+                    <span>{item}</span>
+                    <span className="font-semibold text-gray-700">₹{price}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
 const maxStorage = 100; // Maximum storage limit in kg
 
@@ -55,23 +79,47 @@ const Suppliers = () => {
     }
   };
 
-  const findBestVendors = () => {
-    let result = selectedItems.map(({ value: item }) => {
-      let bestVendor = vendors.reduce((best, vendor) => {
-        return vendor.prices[item] < best.price
-          ? { name: vendor.name, price: vendor.prices[item] }
-          : best;
-      }, { name: "", price: Infinity });
-
-      return { item, vendor: bestVendor.name, price: bestVendor.price, quantity: quantities[item] || 1 };
-    });
-
-    setBestVendors(result);
+  
+  const findBestVendors = (budget) => {
+    let bestCombination = null;
+    let minCost = Infinity;
+  
+    const backtrack = (index, currentVendors, currentCost) => {
+      // Base case: If all items are processed
+      if (index === selectedItems.length) {
+        if (currentCost < minCost) {
+          minCost = currentCost;
+          bestCombination = [...currentVendors];
+        }
+        return;
+      }
+  
+      let item = selectedItems[index].value;
+  
+      // Try choosing each vendor for the current item
+      for (let vendor of vendors) {
+        if (vendor.prices[item] !== undefined) {
+          let newCost = currentCost + vendor.prices[item] * (quantities[item] || 1);
+  
+          // Prune if cost exceeds budget
+          if (budget !== undefined && newCost > budget) continue;
+  
+          currentVendors.push({ item, vendor: vendor.name, price: vendor.prices[item], quantity: quantities[item] || 1 });
+          backtrack(index + 1, currentVendors, newCost);
+          currentVendors.pop(); // Backtrack
+        }
+      }
+    };
+  
+    backtrack(0, [], 0);
+    setBestVendors(bestCombination || []);
   };
-
+  
   return (
-    <div className="p-6">
+    <div className="p-6 h-screen overflow-y-auto">
       <h2 className="text-2xl font-bold mb-4">Suppliers</h2>
+
+      <VendorList className="p-6" vendors={vendors} />
 
       {/* Dropdown for item selection */}
       <div className="mb-4">

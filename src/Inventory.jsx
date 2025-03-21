@@ -2,10 +2,28 @@ import { useState } from "react";
 
 function Inventory() {
   const [items, setItems] = useState([
-    { id: 1, name: "Apples", quantity: 8, price: 2.5, weight: 0.1 },
-    { id: 2, name: "Bananas", quantity: 7, price: 1.2, weight: 0.1 },
-    { id: 3, name: "Tomatoes", quantity: 7, price: 3.0, weight: 0.1 },
-  ]);
+    { id: 1, name: "Apples", quantity: 8, price: 125, weight: 0.5 },
+    { id: 2, name: "Bananas", quantity: 7, price: 30, weight: 0.5 },
+    { id: 3, name: "Tomatoes", quantity: 7, price: 20, weight: 0.5 },
+    { id: 4, name: "Potatoes", quantity: 10, price: 25, weight: 0.5 },
+    { id: 5, name: "Onions", quantity: 6, price: 35, weight: 0.5 },
+    { id: 6, name: "Carrots", quantity: 10, price: 40, weight: 0.5 },
+    { id: 7, name: "Cabbage", quantity: 10, price: 50, weight: 0.5 },
+   
+    { id: 8, name: "Oranges", quantity: 6, price: 60, weight: 0.5 },
+    { id: 9, name: "Grapes", quantity: 10, price: 90, weight: 0.5 },
+    { id: 10, name: "Pineapple", quantity: 2, price: 150, weight: 0.5 },
+    { id: 11, name: "Mangoes", quantity: 5, price: 100, weight: 0.5 },
+    
+    { id: 12, name: "Milk", quantity: 2, price: 60, weight: 1 },
+    { id: 13, name: "Cheese", quantity: 10, price: 250, weight: 0.5 },
+    { id: 14, name: "Butter", quantity: 10, price: 200, weight: 0.5 },
+    { id: 15, name: "Yogurt", quantity: 3, price: 80, weight: 1 },
+    
+   
+    
+  ]
+);
   const [newItem, setNewItem] = useState({ name: "", quantity: "", price: "", weight: "" });
   const [searchQuery, setSearchQuery] = useState("");
   const storageLimit = 100;
@@ -13,14 +31,32 @@ function Inventory() {
 
   const [restockSuggestions, setRestockSuggestions] = useState([]);
 
+
+  //knapsack branch and bound for restocking
+  class Node {
+    constructor(index, weight, profit, bound) {
+      this.index = index;
+      this.weight = weight;
+      this.profit = profit;
+      this.bound = bound;
+    }
+  }
+  
+  // Max Heap comparator function
+  const compareNodes = (a, b) => b.bound - a.bound;
+  
   const knapsackBranchAndBound = (items, capacity) => {
+    // Sort items by value-to-weight ratio (greedy heuristic)
     items.sort((a, b) => (b.price / b.weight) - (a.price / a.weight));
+  
     let maxProfit = 0;
     let bestSet = [];
+  
     const bound = (index, weight, profit) => {
-      if (index >= items.length || weight >= capacity) return profit;
+      if (weight >= capacity) return 0;
       let boundProfit = profit;
       let totalWeight = weight;
+      
       for (let i = index; i < items.length; i++) {
         if (totalWeight + items[i].weight <= capacity) {
           boundProfit += items[i].price;
@@ -32,24 +68,47 @@ function Inventory() {
       }
       return boundProfit;
     };
-    
-    const knapsack = (index, weight, profit, selected) => {
-      if (weight > capacity) return;
-      if (profit > maxProfit) {
-        maxProfit = profit;
-        bestSet = [...selected];
+  
+    let queue = [];
+    let root = new Node(0, 0, 0, bound(0, 0, 0));
+    queue.push(root);
+  
+    while (queue.length > 0) {
+      queue.sort(compareNodes); // Sort to prioritize highest bound first
+      let current = queue.shift();
+  
+      if (current.bound > maxProfit && current.index < items.length) {
+        let nextIndex = current.index;
+        let includedNode = new Node(
+          nextIndex + 1,
+          current.weight + items[nextIndex].weight,
+          current.profit + items[nextIndex].price,
+          bound(nextIndex + 1, current.weight + items[nextIndex].weight, current.profit + items[nextIndex].price)
+        );
+  
+        if (includedNode.weight <= capacity && includedNode.profit > maxProfit) {
+          maxProfit = includedNode.profit;
+          bestSet = [...bestSet, items[nextIndex]];
+        }
+  
+        if (includedNode.bound > maxProfit) queue.push(includedNode);
+  
+        let excludedNode = new Node(
+          nextIndex + 1,
+          current.weight,
+          current.profit,
+          bound(nextIndex + 1, current.weight, current.profit)
+        );
+  
+        if (excludedNode.bound > maxProfit) queue.push(excludedNode);
       }
-      if (index >= items.length) return;
-      if (bound(index + 1, weight, profit) > maxProfit) {
-        knapsack(index + 1, weight + items[index].weight, profit + items[index].price, [...selected, items[index]]);
-      }
-      knapsack(index + 1, weight, profit, selected);
-    };
+    }
     
-    knapsack(0, 0, 0, []);
     return bestSet;
   };
+  
 
+  //restocking
   const generateRestockSuggestions = () => {
     const itemsNeedingRestock = items.filter(item => item.quantity < 10);
     const selectedItems = knapsackBranchAndBound(itemsNeedingRestock, remainingWeight);
@@ -60,6 +119,7 @@ function Inventory() {
   };
 
 
+  //sorting the current inventory
   const mergeSort = (arr) => {
     if (arr.length <= 1) return arr;
     const mid = Math.floor(arr.length / 2);
@@ -68,6 +128,7 @@ function Inventory() {
     return merge(left, right);
   };
 
+  // merge sort
   const merge = (left, right) => {
     let sortedArray = [];
     while (left.length && right.length) {
@@ -97,7 +158,39 @@ function Inventory() {
     setNewItem({ name: "", quantity: "", price: "", weight: "" });
   };
 
-  const filteredItems = searchQuery ? items.filter(item => item.name.toLowerCase().startsWith(searchQuery.toLowerCase())) : items;
+  // Binary search for search bar
+  const binarySearch = (arr, query) => {
+    let left = 0, right = arr.length - 1;
+    query = query.toLowerCase();
+    let startIndex = -1;
+  
+    while (left <= right) {
+      let mid = Math.floor((left + right) / 2);
+      let midName = arr[mid].name.toLowerCase();
+  
+      if (midName.startsWith(query)) {
+        startIndex = mid;
+        right = mid - 1; // Search further left for the first match
+      } else if (midName < query) {
+        left = mid + 1;
+      } else {
+        right = mid - 1;
+      }
+    }
+  
+    if (startIndex === -1) return []; // No matches found
+  
+    // Collect all matching elements starting from startIndex
+    let results = [];
+    for (let i = startIndex; i < arr.length && arr[i].name.toLowerCase().startsWith(query); i++) {
+      results.push(arr[i]);
+    }
+    return results;
+  };
+  
+  // Usage of Binary Search
+  const filteredItems = searchQuery ? binarySearch(items, searchQuery) : items;
+  
   const currentWeight = items.reduce((sum, item) => sum + item.quantity * item.weight, 0);
   const remainingWeight = storageLimit - currentWeight;
 
@@ -146,7 +239,7 @@ function Inventory() {
               <tr key={item.id} className="border-b">
                 <td className="p-2">{item.name}</td>
                 <td className="p-2">{item.quantity}</td>
-                <td className="p-2">${item.price.toFixed(2)}</td>
+                <td className="p-2">₹{item.price.toFixed(2)}</td>
                 <td className="p-2">{item.weight}</td>
                 <td className="p-2">
                   <button onClick={() => handleDelete(item.id)} className="bg-red-500 text-white px-3 py-1 rounded">Delete</button>
@@ -165,7 +258,10 @@ function Inventory() {
             <tr className="border-b">
               <th className="p-2">Item</th>
               <th className="p-2">Current Quantity</th>
-              <th className="p-2">Needed Weight</th>
+              <th className="p-2">Suggested Quantity To Restock</th>
+              <th className="p-2">Needed Weight To Restock</th>
+              
+
             </tr>
           </thead>
           <tbody>
@@ -173,7 +269,10 @@ function Inventory() {
               <tr key={item.id} className="border-b">
                 <td className="p-2">{item.name}</td>
                 <td className="p-2">{item.quantity}</td>
+                <td className="p-2">{10-item.quantity}</td>
                 <td className="p-2">{item.neededWeight.toFixed(2)} kg</td>
+                
+
               </tr>
             ))}
           </tbody>

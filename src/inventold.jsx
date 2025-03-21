@@ -2,31 +2,63 @@ import { useState } from "react";
 
 function Inventory() {
   const [items, setItems] = useState([
-    { id: 1, name: "Apples", quantity: 20, price: 2.5, weight: 0.1 },
-    { id: 2, name: "Bananas", quantity: 15, price: 1.2, weight: 0.1 },
-    { id: 3, name: "Tomatoes", quantity: 10, price: 3.0, weight: 0.1 },
+    { id: 1, name: "Apples", quantity: 8, price: 2.5, weight: 0.1 },
+    { id: 2, name: "Bananas", quantity: 7, price: 1.2, weight: 0.1 },
+    { id: 3, name: "Tomatoes", quantity: 7, price: 3.0, weight: 0.1 },
   ]);
   const [newItem, setNewItem] = useState({ name: "", quantity: "", price: "", weight: "" });
   const [searchQuery, setSearchQuery] = useState("");
-  const [restockSuggestions, setRestockSuggestions] = useState([]);
   const storageLimit = 100;
 
-  const handleRestockSuggestion = () => {
-    let remainingWeight = storageLimit - items.reduce((sum, item) => sum + item.quantity * item.weight, 0);
-    let suggestions = [];
-    
-    const sortedItems = [...items].sort((a, b) => b.price / b.weight - a.price / a.weight);
-    
-    for (let item of sortedItems) {
-      if (remainingWeight <= 0) break;
-      let maxQuantity = Math.floor(remainingWeight / item.weight);
-      if (maxQuantity > 0) {
-        suggestions.push({ name: item.name, quantity: maxQuantity });
-        remainingWeight -= maxQuantity * item.weight;
+
+  const [restockSuggestions, setRestockSuggestions] = useState([]);
+
+  const knapsackBranchAndBound = (items, capacity) => {
+    items.sort((a, b) => (b.price / b.weight) - (a.price / a.weight));
+    let maxProfit = 0;
+    let bestSet = [];
+    const bound = (index, weight, profit) => {
+      if (index >= items.length || weight >= capacity) return profit;
+      let boundProfit = profit;
+      let totalWeight = weight;
+      for (let i = index; i < items.length; i++) {
+        if (totalWeight + items[i].weight <= capacity) {
+          boundProfit += items[i].price;
+          totalWeight += items[i].weight;
+        } else {
+          boundProfit += (items[i].price / items[i].weight) * (capacity - totalWeight);
+          break;
+        }
       }
-    }
-    setRestockSuggestions(suggestions);
+      return boundProfit;
+    };
+    
+    const knapsack = (index, weight, profit, selected) => {
+      if (weight > capacity) return;
+      if (profit > maxProfit) {
+        maxProfit = profit;
+        bestSet = [...selected];
+      }
+      if (index >= items.length) return;
+      if (bound(index + 1, weight, profit) > maxProfit) {
+        knapsack(index + 1, weight + items[index].weight, profit + items[index].price, [...selected, items[index]]);
+      }
+      knapsack(index + 1, weight, profit, selected);
+    };
+    
+    knapsack(0, 0, 0, []);
+    return bestSet;
   };
+
+  const generateRestockSuggestions = () => {
+    const itemsNeedingRestock = items.filter(item => item.quantity < 10);
+    const selectedItems = knapsackBranchAndBound(itemsNeedingRestock, remainingWeight);
+    setRestockSuggestions(selectedItems.map(item => ({
+      ...item,
+      neededWeight: (10 - item.quantity) * item.weight,
+    })));
+  };
+
 
   const mergeSort = (arr) => {
     if (arr.length <= 1) return arr;
@@ -37,29 +69,27 @@ function Inventory() {
   };
 
   const merge = (left, right) => {
-    let sortedArr = [];
-    let i = 0, j = 0;
-    while (i < left.length && j < right.length) {
-      if (left[i].name.localeCompare(right[j].name) < 0) {
-        sortedArr.push(left[i++]);
+    let sortedArray = [];
+    while (left.length && right.length) {
+      if (left[0].name.toLowerCase() < right[0].name.toLowerCase()) {
+        sortedArray.push(left.shift());
       } else {
-        sortedArr.push(right[j++]);
+        sortedArray.push(right.shift());
       }
     }
-    return [...sortedArr, ...left.slice(i), ...right.slice(j)];
+    return [...sortedArray, ...left, ...right];
+  };
+
+  const handleDelete = (id) => {
+    setItems(items.filter((item) => item.id !== id));
   };
 
   const handleAddItem = () => {
     if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.weight) return;
-    const totalWeight = items.reduce((sum, item) => sum + item.quantity * item.weight, 0) + (Number(newItem.quantity) * Number(newItem.weight));
-    if (totalWeight > storageLimit) {
-      alert("Cannot add item. Storage limit exceeded!");
-      return;
-    }
+    let existingIndex = items.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
     let updatedItems = [...items];
-    const existingItemIndex = updatedItems.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
-    if (existingItemIndex !== -1) {
-      updatedItems[existingItemIndex].quantity += Number(newItem.quantity);
+    if (existingIndex !== -1) {
+      updatedItems[existingIndex].quantity += Number(newItem.quantity);
     } else {
       updatedItems.push({ ...newItem, id: Date.now(), quantity: Number(newItem.quantity), price: Number(newItem.price), weight: Number(newItem.weight) });
     }
@@ -67,16 +97,13 @@ function Inventory() {
     setNewItem({ name: "", quantity: "", price: "", weight: "" });
   };
 
-  const handleDelete = (id) => {
-    setItems(items.filter((item) => item.id !== id));
-  };
-
   const filteredItems = searchQuery ? items.filter(item => item.name.toLowerCase().startsWith(searchQuery.toLowerCase())) : items;
   const currentWeight = items.reduce((sum, item) => sum + item.quantity * item.weight, 0);
   const remainingWeight = storageLimit - currentWeight;
 
+  
   return (
-    <div className="p-6">
+    <div className="p-6 h-screen overflow-y-auto">
       <h2 className="text-2xl font-bold mb-4">Inventory Management</h2>
       <div className="mb-4">
         <input
@@ -87,6 +114,7 @@ function Inventory() {
           onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
+      
       <div className="bg-white p-4 shadow rounded-lg mb-4">
         <h3 className="text-lg font-semibold mb-2">Add New Item</h3>
         <div className="grid grid-cols-4 gap-2">
@@ -97,6 +125,7 @@ function Inventory() {
           <button onClick={handleAddItem} className="bg-blue-500 text-white p-2 rounded mt-2">Add Item</button>
         </div>
       </div>
+
       <div className="bg-white p-4 shadow rounded-lg mb-4">
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-lg font-semibold">Current Inventory</h3>
@@ -109,6 +138,7 @@ function Inventory() {
               <th className="p-2">Quantity</th>
               <th className="p-2">Price</th>
               <th className="p-2">Weight</th>
+              <th className="p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -118,34 +148,38 @@ function Inventory() {
                 <td className="p-2">{item.quantity}</td>
                 <td className="p-2">${item.price.toFixed(2)}</td>
                 <td className="p-2">{item.weight}</td>
+                <td className="p-2">
+                  <button onClick={() => handleDelete(item.id)} className="bg-red-500 text-white px-3 py-1 rounded">Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      
+
       <div className="bg-white p-4 shadow rounded-lg mb-4">
-        <h3 className="text-lg font-semibold mb-2">Restocking Suggestions</h3>
-        <p className="text-sm text-gray-600 mb-2">Suggested items to restock based on storage availability.</p>
-        <button onClick={handleRestockSuggestion} className="bg-green-500 text-white p-2 rounded mb-2">Get Restock Suggestions</button>
+        <h3 className="text-lg font-semibold mb-2">Restock Suggestions</h3>
+        <button onClick={generateRestockSuggestions} className="bg-green-500 text-white p-2 rounded mb-2">Generate Suggestions</button>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b">
               <th className="p-2">Item</th>
-              <th className="p-2">Suggested Quantity</th>
+              <th className="p-2">Current Quantity</th>
+              <th className="p-2">Needed Weight</th>
             </tr>
           </thead>
           <tbody>
-            {restockSuggestions.map((item, index) => (
-              <tr key={index} className="border-b">
+            {restockSuggestions.map((item) => (
+              <tr key={item.id} className="border-b">
                 <td className="p-2">{item.name}</td>
                 <td className="p-2">{item.quantity}</td>
+                <td className="p-2">{item.neededWeight.toFixed(2)} kg</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      
+
     </div>
   );
 }
